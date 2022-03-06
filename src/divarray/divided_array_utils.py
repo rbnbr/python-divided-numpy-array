@@ -28,5 +28,5 @@ def jit_extents(a):
 def __extents__(a):
     mn = np.min(a)
     mx = np.max(a)
-    return mx, mn, mx - mn
+    return mn, mx, mx - mn
 
