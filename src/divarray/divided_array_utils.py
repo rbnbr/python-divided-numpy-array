@@ -2,6 +2,51 @@ import numpy as np
 import numba as nb
 
 
+def create_tuple_creator_njit(f, n):
+    # https://github.com/numba/numba/issues/2771#issuecomment-414358902
+    assert n > 0
+    f = nb.njit(f)
+    @nb.njit
+    def creator(args):
+        return (f(0, *args),)
+    for i in range(1, n):
+        # need to pass in creator and i to lambda to capture in scope
+        @nb.njit
+        def creator(args, creator=creator, i=i):
+            return creator(args) + (f(i, *args),)
+    return nb.njit(lambda *args: creator(args))
+
+
+def create_tuple_creator_jit(f, n):
+    # https://github.com/numba/numba/issues/2771#issuecomment-414358902
+    assert n > 0
+    f = nb.njit(f)
+    @nb.jit
+    def creator(args):
+        return (f(0, *args),)
+    for i in range(1, n):
+        # need to pass in creator and i to lambda to capture in scope
+        @nb.jit
+        def creator(args, creator=creator, i=i):
+            return creator(args) + (f(i, *args),)
+    return nb.jit(lambda *args: creator(args))
+
+
+def create_tuple_creator_omjit(f, n):
+    # https://github.com/numba/numba/issues/2771#issuecomment-414358902
+    assert n > 0
+    f = nb.njit(f)
+    @nb.jit(nopython=False, forceobj=True)
+    def creator(args):
+        return (f(0, *args),)
+    for i in range(1, n):
+        # need to pass in creator and i to lambda to capture in scope
+        @nb.jit(nopython=False, forceobj=True)
+        def creator(args, creator=creator, i=i):
+            return creator(args) + (f(i, *args),)
+    return nb.jit(lambda *args: creator(args), nopython=False, forceobj=True)
+
+
 def extents(a, with_difference=True):
     """
     Returns extents of the given iterable.

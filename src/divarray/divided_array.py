@@ -4,6 +4,38 @@ import numpy as np
 from src.divarray.divided_array_utils import jit_extents
 
 
+def __create_subarrays__(sub_arrays_shape, patch_shape, array):
+    """
+    returns a subarray containing copies of array.
+    :param sub_arrays_shape:
+    :param patch_shape:
+    :param array:
+    :return:
+    """
+    # create container for subarrays
+    subarrays_container = np.empty(sub_arrays_shape, dtype=object)
+
+    for pos in product(*[range(s) for s in subarrays_container.shape]):
+        obj = tuple(slice(pos[i] * patch_shape[i], (pos[i] + 1) * patch_shape[i], None)
+                    for i in range(len(array.shape)))
+        patch = np.empty(patch_shape, dtype=array.dtype)
+        sampled_patch = array[obj]
+        pobj = __parse_hypercube_indices_to_patch_slice__(np.zeros(len(patch_shape), dtype=int),
+                                                          sampled_patch.shape)
+        patch[pobj] = sampled_patch  # this is an assignment to a selection which should act as copy
+        subarrays_container[pos] = patch
+
+    return subarrays_container
+
+
+def __parse_hypercube_indices_to_patch_slice__(idx, shape):
+    return tuple(slice(idx[i] * shape[i], (idx[i] + 1) * shape[i], None) for i in range(len(shape)))
+
+
+def __shape_to_slice_access_operator__(shape):
+    return tuple(slice(0, s, None) for s in shape)
+
+
 class DividedArray:
     """
     A divided array simulates a numpy array interface.
@@ -14,11 +46,12 @@ class DividedArray:
     The data is split into chunks of a size which fits nicely into memory.
     This reduced the amount of memory accesses and speeds up the process.
     """
+
     def __init__(self, obj, patch_shape):
         """
         Constructs a
         :param obj:
-        :param patchShape:
+        :param patch_shape:
         """
         # convert to packed numpy array
         array = np.array(obj)
@@ -28,7 +61,7 @@ class DividedArray:
         self.shape = array.shape
         self.patch_shape_ = patch_shape  # original patch_shape
         self.patch_shape = tuple(patch_shape[i] if patch_shape[i] is not None else array.shape[i]
-                            for i in range(len(patch_shape))) # translated to replace None values
+                                 for i in range(len(patch_shape)))  # translated to replace None values
         self.dtype = array.dtype
 
         assert len(patch_shape) == len(self.shape), "patch_shape and shape have to be same length: {} != {}".format(
@@ -39,41 +72,13 @@ class DividedArray:
         sub_arrays_shape = tuple(math.ceil(array.shape[i] / self.patch_shape[i]) for i in range(len(array.shape)))
 
         # divide array into chunks of size patch_shape and fill them into sub_arrays
-        self.__sub_arrays__ = DividedArray.__create_subarrays__(sub_arrays_shape, self.patch_shape, array)
+        self.__sub_arrays__ = __create_subarrays__(sub_arrays_shape, self.patch_shape, array)
 
         # create array of same size as __sub_arrays__ with their indices as entries
         self.__sub_arrays_indices__ = np.empty_like(self.__sub_arrays__, dtype=object)
         # assign indices
         for pos in product(*[range(s) for s in self.__sub_arrays_indices__.shape]):
             self.__sub_arrays_indices__[pos] = pos
-
-    @staticmethod
-    def __create_subarrays__(sub_arrays_shape, patch_shape, array):
-        """
-        returns a subarray containing copies of array.
-        :param sub_arrays_shape:
-        :param patch_shape:
-        :param array:
-        :return:
-        """
-        # create container for subarrays
-        subarrays_container = np.empty(sub_arrays_shape, dtype=object)
-
-        for pos in product(*[range(s) for s in subarrays_container.shape]):
-            obj = tuple(slice(pos[i] * patch_shape[i], (pos[i] + 1) * patch_shape[i], None)
-                        for i in range(len(array.shape)))
-            patch = np.empty(patch_shape, dtype=array.dtype)
-            sampled_patch = array[obj]
-            pobj = DividedArray.__parse_hypercube_indices_to_patch_slice__(np.zeros(len(patch_shape), dtype=int),
-                                                                           sampled_patch.shape)
-            patch[pobj] = sampled_patch  # this is an assignment to a selection which should act as copy
-            subarrays_container[pos] = patch
-
-        return subarrays_container
-
-    @staticmethod
-    def __parse_hypercube_indices_to_patch_slice__(idx, shape):
-        return tuple(slice(idx[i] * shape[i], (idx[i] + 1) * shape[i], None) for i in range(len(shape)))
 
     def __parse_access_int__(self, i, dim, hypercube_extents=None, isslice=False, slice_step=None, isstart=False):
         if i is None:
@@ -95,7 +100,7 @@ class DividedArray:
                     else:
                         ret = int(float_i)
                         if isslice:
-                            return ret if ret > 0 else None  # specifically for step values less than 0, this is necessary
+                            return ret if ret > 0 else None  # specifically for step values less than 0
                         else:
                             return ret
             else:
@@ -182,10 +187,6 @@ class DividedArray:
                 else:
                     raise KeyError("type '{}' is not supported by indexing.\ngot element:\n{}".format(type(item), item))
 
-    @staticmethod
-    def __shape_to_slice_access_operator__(shape):
-        return tuple(slice(0, s, None) for s in shape)
-
     def __getitem__(self, item):
         """
         Translates the requested item into the correct access for subarrays and returns the reconstructed result.
@@ -221,24 +222,25 @@ class DividedArray:
 
         # build shape for hypercube
         hypercube_extents = np.asarray([jit_extents(requested_subarrays_indices[:, i])
-                             if len(requested_subarrays_indices) > 0 else (0, 0)
-                             for i in range(requested_subarrays_indices.shape[1])])
+                                        if len(requested_subarrays_indices) > 0 else (0, 0)
+                                        for i in range(requested_subarrays_indices.shape[1])])
 
         # build intermediate hypercube out of requested subarrays indices
-        hypercube = np.empty(tuple(min((hce[2] + 1) * self.patch_shape[i], self.shape[i]) for i, hce in enumerate(hypercube_extents)), dtype=self.dtype)
+        hypercube = np.empty(tuple(min((hce[2] + 1) * self.patch_shape[i], self.shape[i])
+                                   for i, hce in enumerate(hypercube_extents)), dtype=self.dtype)
 
         # fill hypercube with data from subarrays
         # translates requested subarray indices into hypercube indices
         hypercube_indices = requested_subarrays_indices - hypercube_extents[:, 0]
 
         for i in range(len(hypercube_indices)):
-            hc_slice = DividedArray.__parse_hypercube_indices_to_patch_slice__(hypercube_indices[i], self.patch_shape)
+            hc_slice = __parse_hypercube_indices_to_patch_slice__(hypercube_indices[i], self.patch_shape)
             rsi = tuple(requested_subarrays_indices[i])
 
             hypercube_patch = hypercube[hc_slice]
 
             if hypercube_patch.shape != self.patch_shape:
-                access_obj = DividedArray.__shape_to_slice_access_operator__(hypercube_patch.shape)
+                access_obj = __shape_to_slice_access_operator__(hypercube_patch.shape)
                 hypercube_patch[:] = self.__sub_arrays__[rsi][access_obj]
             else:
                 hypercube_patch[:] = self.__sub_arrays__[rsi]

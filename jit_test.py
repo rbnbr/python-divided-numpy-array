@@ -1,4 +1,5 @@
 import numba as nb
+
 import numpy as np
 import time
 
@@ -48,7 +49,7 @@ def test_f(n, e_fn):
     return st
 
 
-def main():
+def test_extents():
     tests = [0, 1, -2, (0, 1), 0.1, -0.2, (0, 0.1, -2, -2.2),
              np.array(0), np.array((-1, 2, -1)), np.array((0.1, -0.2, 5))]
 
@@ -61,6 +62,57 @@ def main():
     print("pure jit: {}".format(test_f(n, __extents__)))
     print("mixed jit: {}".format(test_f(n, extents)))
     print("no jit: {}".format(test_f(n, extents_wd)))
+
+
+def create_tuple_creator(f, n):
+    # https://github.com/numba/numba/issues/2771#issuecomment-414358902
+    assert n > 0
+    f = nb.njit(f)
+    @nb.njit
+    def creator(args):
+        return (f(0, *args),)
+    for i in range(1, n):
+        # need to pass in creator and i to lambda to capture in scope
+        @nb.njit
+        def creator(args, creator=creator, i=i):
+            return creator(args) + (f(i, *args),)
+    return nb.njit(lambda *args: creator(args))
+
+
+@nb.njit
+def tuple_add_value(t: tuple, b):
+    return t + (b, )
+
+
+@nb.njit
+def tuple_builder(x):
+    t = ()
+    for i in range(x):
+       t = tuple_add_value(t, i)
+    return t
+
+
+@nb.jit(nopython=False, forceobj=True)
+def __shape_dim_to_slice_access_operator__(shape_dim):
+    return slice(0, shape_dim, None)
+
+
+def var_range(x):
+    range_x = create_tuple_creator(lambda i: i, x)
+    @nb.njit
+    def foo():
+        print(range_x())
+    return foo
+
+
+def tuple_builder_test():
+    # print(tuple_builder(0))
+    # print(tuple_add_value((), 1))
+    print(__shape_dim_to_slice_access_operator__(0))
+
+
+def main():
+    tuple_builder_test()
 
 
 if __name__ == '__main__':
