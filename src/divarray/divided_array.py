@@ -1,7 +1,7 @@
 import math
 from itertools import product
 import numpy as np
-from src.divarray.divided_array_utils import extents
+from src.divarray.divided_array_utils import jit_extents
 
 
 class DividedArray:
@@ -220,7 +220,7 @@ class DividedArray:
         )
 
         # build shape for hypercube
-        hypercube_extents = np.asarray([extents(requested_subarrays_indices[:, i], with_difference=True)
+        hypercube_extents = np.asarray([jit_extents(requested_subarrays_indices[:, i])
                              if len(requested_subarrays_indices) > 0 else (0, 0)
                              for i in range(requested_subarrays_indices.shape[1])])
 

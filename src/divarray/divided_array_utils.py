@@ -1,36 +1,32 @@
 import numpy as np
-# from numba import jit
+import numba as nb
 
 
-def extents(a, with_difference=False, *, axis=None, keepdims=np._NoValue, initial_min=np._NoValue, initial_max=np._NoValue,
-            out_min=None, out_max=None, where_min=np._NoValue, where_max=np._NoValue):
+def extents(a, with_difference=True):
     """
     Returns extents of the given iterable.
     Short for (np.min(a), np.max(a), (if with_difference) max - min)
     :param a:
+    :param with_difference:
     :return:
     """
-    _min = np.min(a, axis=axis, out=out_min, keepdims=keepdims, initial=initial_min, where=where_min)
-    _max = np.max(a, axis=axis, out=out_max, keepdims=keepdims, initial=initial_max, where=where_max)
+    e = jit_extents(a)
     if with_difference:
-        return _min, _max, _max - _min
+        return e
     else:
-        return _min, _max
+        return e[0], e[1]
 
 
-# @jit
-# def extents(a, with_difference=False):
-#     """
-#     Returns extents of the given iterable.
-#     Short for (np.min(a), np.max(a), (if with_difference) max - min)
-#     :param a:
-#     :param with_difference:
-#     :return:
-#     """
-#     _min = np.min(a)
-#     _max = np.max(a)
-#     if with_difference:
-#         return _min, _max, _max - _min
-#     else:
-#         return _min, _max, 0
+@nb.jit(nopython=False, forceobj=True)
+def jit_extents(a):
+    if type(a) != np.ndarray:
+        a = np.array(a)
+    return __extents__(a)
+
+
+@nb.njit
+def __extents__(a):
+    mn = np.min(a)
+    mx = np.max(a)
+    return mx, mn, mx - mn
 
