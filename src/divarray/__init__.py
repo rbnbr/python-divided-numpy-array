@@ -1,0 +1,1 @@
+from divided_array import DividedArray

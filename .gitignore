@@ -1,0 +1,7 @@
+.idea/
+./tests/
+__pycache__/
+
+# ignore setup for now
+setup.cfg
+pyproject.toml
