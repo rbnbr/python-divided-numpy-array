@@ -1,6 +1,6 @@
 .idea/
-./tests/
 __pycache__/
+venv/
 
 # ignore setup for now
 setup.cfg

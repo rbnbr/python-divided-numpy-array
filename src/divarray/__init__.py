@@ -1,1 +1,1 @@
-from divided_array import DividedArray
+from src.divarray.divided_array import DividedArray
