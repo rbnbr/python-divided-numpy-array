@@ -23,7 +23,7 @@ class DividedArray:
         # convert to packed numpy array
         array = np.array(obj)
 
-        self.array = array
+        # self.array = array
 
         self.shape = array.shape
         self.patch_shape_ = patch_shape  # original patch_shape
@@ -46,7 +46,6 @@ class DividedArray:
         # assign indices
         for pos in product(*[range(s) for s in self.__sub_arrays_indices__.shape]):
             self.__sub_arrays_indices__[pos] = pos
-
 
     @staticmethod
     def __create_subarrays__(sub_arrays_shape, patch_shape, array):
