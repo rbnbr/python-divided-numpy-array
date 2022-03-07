@@ -1,5 +1,5 @@
 import numba as nb
-
+from itertools import product
 import numpy as np
 import time
 
@@ -111,8 +111,75 @@ def tuple_builder_test():
     print(__shape_dim_to_slice_access_operator__(0))
 
 
+@nb.njit
+def slice_test(a, start, stop, step):
+    s = slice(start, stop, step)
+    return a[s]
+
+
+# accelerate this
+def __shape_to_slices_access_operator__(shape):
+    return tuple(slice(0, s, None) for s in shape)
+
+
+def __shape_to_slice_access_operator__(s):
+    return slice(0, s, None)
+
+
+def tp_creator(tp_len):
+    # call in init depending on shape length
+    tp = create_tuple_creator(lambda i, shape: slice(0, shape[i], None), tp_len)
+    return tp
+
+
+@nb.njit
+def use_tuple_slice_builder_in_njit(a, shape):
+    tp = tp_creator(len(shape))
+    return a[tp(shape)]
+
+
+def tuple_creator_example(n):
+    return create_tuple_creator(lambda i, idx, shape: slice(idx[i], idx[i] + shape[i], None), n)
+
+
+@nb.njit
+def njit_accessor(xr, s_ret):
+    return xr[s_ret]
+
+
+def print_tce(idx, shape, xr):
+    tce = tuple_creator_example(len(shape))
+    nb.njit(lambda x: print(njit_accessor(x, tce(idx, shape))))(xr)
+
+
+@nb.njit
+def njit_type(a):
+    if isinstance(a, tuple):
+        return True
+    else:
+        return False
+
+
+@nb.njit
+def _jit_list_of_objects_(l, access):
+    return l[access[0]][access[1]]
+
+
+def list_of_objects(shape, access):
+    x = np.empty(shape, dtype=object)
+    for pos in product(*[range(s) for s in x.shape]):
+        x[pos] = sum(pos)
+    print(nb.typeof(x.tolist()))
+    return _jit_list_of_objects_(x, access)
+
+
 def main():
-    tuple_builder_test()
+    # print(slice_test(np.arange(10), 0, None, 1))
+    # shape = (5, 10, 5, 10)
+    # print(use_tuple_slice_builder_in_njit(np.empty(shape), shape))
+    # print_tce((5, 6, 7), (1, 2, 3), np.empty((10, 10, 10)))
+    # print(njit_type(list()))
+    list_of_objects((10, 10), (0, 1))
 
 
 if __name__ == '__main__':

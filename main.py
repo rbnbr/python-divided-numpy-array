@@ -4,7 +4,7 @@ from itertools import product
 from tests.access_tester import AccessTester
 
 
-x = np.empty((54, 144, 144, 3, 20), dtype=object)
+x = np.empty((54, 144, 144, 6, 9), dtype=object)
 # x = np.empty((10, 10), dtype=object)
 for pos in product(*[range(s) for s in x.shape]):
     x[pos] = pos
@@ -17,7 +17,9 @@ at = AccessTester(x, dv)
 
 
 def main():
-    print(at[0:13, 4:30, 15:44])
+    _ = at[0:7, 4:8, 15:44, [1, 2]]
+    print(at[0:7, 4:33, 15:44, [1, 2]])
+    # print(at[(0, slice(None, None, None), )])
     pass
 
 
