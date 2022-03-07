@@ -50,23 +50,6 @@ class DividedArray:
         for pos in product(*[range(s) for s in self.__sub_arrays_indices__.shape]):
             self.__sub_arrays_indices__[pos] = pos
 
-        # create accelerated method to fill hypercube with values
-        idx_and_patch_to_slices_fn = DividedArray.__create_parse_hypercube_indices_to_patch_slices_func__(
-            len(self.shape))
-        self.__jit_get_hypercube_patch__ = nb.njit(
-            lambda hypercube, idx, shape: hypercube[idx_and_patch_to_slices_fn(idx, shape)]
-        )
-
-        shape_to_slice_access_operator_func = DividedArray.__create_shape_to_slice_access_operator_func__(
-            len(self.shape))
-        list_to_tuple_func = create_tuple_creator_njit(lambda i, l: l[i], len(self.__sub_arrays__.shape))
-        self.__jit_get_subarray__ = nb.njit(
-            lambda sub_arrays, requested_subarrays_indice, hyper_cube_patch_shape, ps:
-            sub_arrays[list_to_tuple_func(requested_subarrays_indice)] if hyper_cube_patch_shape == ps else
-            sub_arrays[list_to_tuple_func(requested_subarrays_indice)][shape_to_slice_access_operator_func(
-                hyper_cube_patch_shape)]
-        )
-
     @staticmethod
     def __create_subarrays__(sub_arrays_shape, patch_shape, array):
         """
@@ -80,29 +63,19 @@ class DividedArray:
         subarrays_container = np.empty(sub_arrays_shape, dtype=object)
 
         for pos in product(*[range(s) for s in subarrays_container.shape]):
-            obj = tuple(slice(pos[i] * patch_shape[i], (pos[i] + 1) * patch_shape[i], None)
-                        for i in range(len(array.shape)))
+            obj = DividedArray.__parse_hypercube_indices_to_patch_slices__(pos, patch_shape, None)
             subarrays_container[pos] = array[obj]
 
         return subarrays_container
 
     @staticmethod
     def __parse_hypercube_indices_to_patch_slices__(idx, shape, max_shape):
-        return tuple(slice(min(idx[i] * shape[i], max_shape[i]), min((idx[i] + 1) * shape[i], max_shape[i]), None)
+        if max_shape is None:
+            return tuple(slice(idx[i] * shape[i], (idx[i] + 1) * shape[i], None)
                      for i in range(len(shape)))
-
-    @staticmethod
-    def __create_parse_hypercube_indices_to_patch_slices_func__(n):
-        return create_tuple_creator_njit(lambda i, idx, shape: slice(idx[i] * shape[i], (idx[i] + 1) * shape[i], None),
-                                         n)
-
-    @staticmethod
-    def __shape_to_slice_access_operator__(shape):
-        return tuple(slice(0, s, None) for s in shape)
-
-    @staticmethod
-    def __create_shape_to_slice_access_operator_func__(n):
-        return create_tuple_creator_njit(lambda i, shape: slice(0, shape[i], None), n)
+        else:
+            return tuple(slice(min(idx[i] * shape[i], max_shape[i]), min((idx[i] + 1) * shape[i], max_shape[i]), None)
+                     for i in range(len(shape)))
 
     @staticmethod
     def __parse_access_int__(i, dim, patch_shape, hypercube_extents=None, isslice=False, slice_step=None, isstart=False):
@@ -225,43 +198,6 @@ class DividedArray:
                 else:
                     raise KeyError("type '{}' is not supported by indexing.\ngot element:\n{}".format(type(item), item))
 
-    @staticmethod
-    @nb.njit
-    def __s_jit_fill_hypercube__(hypercube, sub_arrays, hypercube_indices,
-                                 requested_subarrays_indices, patch_shape,
-                                 get_hypercube_patch, get_subarray):
-        for i in range(len(hypercube_indices)):
-            hypercube_patch = get_hypercube_patch(hypercube, hypercube_indices[i], patch_shape)
-            hypercube_patch[:] = get_subarray(sub_arrays, requested_subarrays_indices[i],
-                                              hypercube_patch.shape, patch_shape)
-
-    def __jit_fill_hypercube__(self, hypercube, sub_arrays, hypercube_indices, requested_subarrays_indices, patch_shape):
-        """
-        for i in range(len(hypercube_indices)):
-            hc_slices = DividedArray.__parse_hypercube_indices_to_patch_slices__(hypercube_indices[i], patch_shape)
-            rsi = tuple(requested_subarrays_indices[i])
-
-            hypercube_patch = hypercube[hc_slices]
-
-            if hypercube_patch.shape != patch_shape:
-                access_obj = DividedArray.__shape_to_slice_access_operator__(hypercube_patch.shape)
-                hypercube_patch[:] = sub_arrays[rsi][access_obj]
-            else:
-                hypercube_patch[:] = sub_arrays[rsi]
-        """
-        print(nb.typeof(hypercube))
-        print(nb.typeof(sub_arrays))
-        print(nb.typeof(hypercube_indices))
-        print(nb.typeof(requested_subarrays_indices))
-        print(nb.typeof(patch_shape))
-
-
-        print(self.dtype)
-        DividedArray.__s_jit_fill_hypercube__(
-            hypercube.astype(np.float64), sub_arrays.astype(np.float64), hypercube_indices, requested_subarrays_indices, patch_shape,
-            self.__jit_get_hypercube_patch__, self.__jit_get_subarray__
-        )
-
     def __getitem__(self, item):
         """
         Translates the requested item into the correct access for subarrays and returns the reconstructed result.
@@ -323,28 +259,26 @@ class DividedArray:
         t = time.time_ns()
 
         # build intermediate hypercube out of requested subarrays indices
-        # hypercube = np.empty(tuple(min((hce[2] + 1) * patch_shape[i], shape[i])
-        #                            for i, hce in enumerate(hypercube_extents)), dtype=dtype)
-        hypercube = np.concatenate(sub_arrays[tuple(requested_subarrays_indices.transpose())])
+        hypercube = np.empty(tuple(min((hce[2] + 1) * patch_shape[i], shape[i])
+                                   for i, hce in enumerate(hypercube_extents)), dtype=dtype)
+        # hypercube = np.concatenate(sub_arrays[tuple(requested_subarrays_indices.transpose())])
 
         print("build empty hypercube of shape {} took: {}, bt: {}".format(hypercube.shape, time.time_ns() - t, time.time_ns() - bt))
         t = time.time_ns()
 
         # fill hypercube with data from subarrays
         # translates requested subarray indices into hypercube indices
-        # hypercube_indices = requested_subarrays_indices - hypercube_extents[:, 0]
+        hypercube_indices = requested_subarrays_indices - hypercube_extents[:, 0]
 
-        # all_hc_slices = tuple()
+        for i in range(len(hypercube_indices)):
+            hc_slices = DividedArray.__parse_hypercube_indices_to_patch_slices__(hypercube_indices[i], patch_shape,
+                                                                                 hypercube.shape)
+            rsi = tuple(requested_subarrays_indices[i])
 
-        #for i in range(len(hypercube_indices)):
-        #    hc_slices = DividedArray.__parse_hypercube_indices_to_patch_slices__(hypercube_indices[i], patch_shape,
-        #                                                                         hypercube.shape)
-        #    rsi = tuple(requested_subarrays_indices[i])
-#
-        #    hypercube_patch = hypercube[hc_slices]
-#
-        #    hypercube_patch[:] = sub_arrays[rsi]
-#
+            hypercube_patch = hypercube[hc_slices]
+
+            hypercube_patch[:] = sub_arrays[rsi]
+
         #    # if hypercube_patch.shape != patch_shape:
         #    #     access_obj = DividedArray.__shape_to_slice_access_operator__(hypercube_patch.shape)
         #    #     hypercube_patch[:] = sub_arrays[rsi][access_obj]
