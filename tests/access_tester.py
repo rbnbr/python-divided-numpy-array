@@ -18,7 +18,7 @@ class AccessTester:
 
         try:
             tns = time.time_ns()
-            ar = np.array(self.a[item])
+            ar = np.array(self.a[item]).copy()
             a_access_time = time.time_ns() - tns
         except Exception as e:
             print("failed to access first array with error:\n{}".format(e))
@@ -30,7 +30,7 @@ class AccessTester:
 
         try:
             tns = time.time_ns()
-            br = np.array(self.b[item])
+            br = np.array(self.b[item]).copy()
             b_access_time = time.time_ns() - tns
         except Exception as e:
             print("failed to access second array with error:\n{}".format(e))

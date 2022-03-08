@@ -1,5 +1,5 @@
 import numpy as np
-import numba as nb
+# import numba as nb
 
 
 def create_tuple_creator_njit(f, n):
@@ -62,14 +62,14 @@ def extents(a, with_difference=True):
         return e[0], e[1]
 
 
-@nb.jit(nopython=False, forceobj=True)
+# @nb.jit(nopython=False, forceobj=True)
 def jit_extents(a):
     if type(a) != np.ndarray:
         a = np.array(a)
     return __extents__(a)
 
 
-@nb.njit
+#@nb.njit
 def __extents__(a):
     mn = np.min(a)
     mx = np.max(a)

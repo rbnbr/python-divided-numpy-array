@@ -1,7 +1,7 @@
 import math
 from itertools import product
 import numpy as np
-import numba as nb
+# import numba as nb
 from src.divarray.divided_array_utils import jit_extents, create_tuple_creator_njit
 import time
 
