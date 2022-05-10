@@ -12,7 +12,7 @@ First tests seems to show that there is now relevant speed up compared to the st
 However, this approach could still be useful to deal with huge datasets which cannot be loaded into ram at once but need to be read from disk.
 The implementation needs multiple adjustments to make this work.
 
-Nevertheless, if you are interested on how to adjust the access item for a numpy array to access specific chunks in a downscales array, then check the \__getitem\__ implementation of the DividedArray.
+Nevertheless, if you are interested on how to adjust the access item for a numpy array to access specific chunks in a downscaled array, then check the \__getitem\__ implementation of the DividedArray.
 
 
 ### TODOs
